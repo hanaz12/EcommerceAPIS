@@ -34,15 +34,28 @@ public class User implements UserDetails {
 
     private String profileImageUrl;
 
+    @Column(name = "verification_token")
+    private String verificationToken;
+
+    private LocalDateTime verificationTokenExpiry;
+
+    @Column(name = "reset_token")
+    private String resetToken;
+
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     private Role role = Role.USER;
 
-    private Boolean isEnabled = true;
+    @Builder.Default
+    private Boolean isEnabled = false;
 
+    @Builder.Default
     private Boolean isEmailVerified = false;
 
+    @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 
+    @Builder.Default
     private LocalDateTime updatedAt = LocalDateTime.now();
 
     // Spring Security
@@ -52,9 +65,14 @@ public class User implements UserDetails {
     }
 
     @Override public String getPassword() { return password; }
+
     @Override public String getUsername() { return email; }
+
     @Override public boolean isAccountNonExpired() { return true; }
+
     @Override public boolean isAccountNonLocked() { return true; }
+
     @Override public boolean isCredentialsNonExpired() { return true; }
+
     @Override public boolean isEnabled() { return isEnabled; }
 }
