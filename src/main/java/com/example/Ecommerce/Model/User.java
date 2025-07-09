@@ -41,6 +41,8 @@ public class User implements UserDetails {
 
     @Column(name = "reset_token")
     private String resetToken;
+    @Column(name = "reset_token_expiry")
+    private LocalDateTime resetTokenExpiry;
 
     @Enumerated(EnumType.STRING)
     @Builder.Default

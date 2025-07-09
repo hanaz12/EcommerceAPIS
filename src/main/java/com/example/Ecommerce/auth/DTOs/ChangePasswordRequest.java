@@ -1,4 +1,4 @@
-package com.example.Ecommerce.DTO;
+package com.example.Ecommerce.auth.DTOs;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;

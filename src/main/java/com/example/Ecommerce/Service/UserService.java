@@ -1,8 +1,7 @@
 package com.example.Ecommerce.Service;
 
-import com.example.Ecommerce.DTO.ChangePasswordRequest;
-import com.example.Ecommerce.auth.AuthenticationRequest;
-import com.example.Ecommerce.auth.AuthenticationResponse;
+import com.example.Ecommerce.auth.DTOs.ChangePasswordRequest;
+import com.example.Ecommerce.auth.DTOs.AuthenticationResponse;
 public interface UserService {
-    public AuthenticationResponse changePassword(ChangePasswordRequest changePasswordRequest);
+
 }

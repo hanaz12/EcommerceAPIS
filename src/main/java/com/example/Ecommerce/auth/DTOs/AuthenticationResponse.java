@@ -1,4 +1,4 @@
-package com.example.Ecommerce.auth;
+package com.example.Ecommerce.auth.DTOs;
 
 
 import com.fasterxml.jackson.annotation.JsonProperty;

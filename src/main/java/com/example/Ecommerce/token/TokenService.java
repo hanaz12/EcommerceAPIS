@@ -2,7 +2,7 @@ package com.example.Ecommerce.token;
 
 import com.example.Ecommerce.Model.User;
 import com.example.Ecommerce.Repository.UserRepository;
-import com.example.Ecommerce.auth.AuthenticationResponse;
+import com.example.Ecommerce.auth.DTOs.AuthenticationResponse;
 import com.example.Ecommerce.config.JwtService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;

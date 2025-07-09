@@ -1,10 +1,10 @@
 package com.example.Ecommerce.auth;
 
-import com.example.Ecommerce.DTO.ChangePasswordRequest;
 import com.example.Ecommerce.Exceptions.UserNotFoundException;
 import com.example.Ecommerce.Enums.Role;
 import com.example.Ecommerce.Model.User;
 import com.example.Ecommerce.Repository.UserRepository;
+import com.example.Ecommerce.auth.DTOs.*;
 import com.example.Ecommerce.config.JwtService;
 import com.example.Ecommerce.token.TokenService;
 import com.example.Ecommerce.Emails.EmailService;
@@ -81,8 +81,17 @@ public class AuthenticationService {
                 .build();
     }
 
-    // ✅ تسجيل الدخول
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
+        System.out.println("in auth method");
+        var user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new UserNotFoundException("Invalid email or password"));
+        System.out.println("user found");
+
+        if (!user.getIsEnabled() || !user.getIsEmailVerified()) {
+            System.out.println("user not enabled");
+            throw new IllegalArgumentException("Account is not verified. Please check your email.");
+        }
+
         try {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
@@ -92,13 +101,6 @@ public class AuthenticationService {
             );
         } catch (Exception e) {
             throw new UserNotFoundException("Invalid email or password");
-        }
-
-        var user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new UserNotFoundException("Invalid email or password"));
-
-        if (!user.getIsEnabled()) {
-            throw new IllegalStateException("Account is not verified. Please check your email.");
         }
 
         var jwtToken = jwtService.generateToken(user);
@@ -113,13 +115,14 @@ public class AuthenticationService {
                 .build();
     }
 
+
     // ✅ تفعيل الحساب عن طريق التوكن
-    public ResponseEntity<String> verifyAccount(String token) {
+    public ResponseEntity<AuthenticationResponse> verifyAccount(String token) {
         var user = userRepository.findByVerificationToken(token)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid verification token"));
 
         if (user.getVerificationTokenExpiry().isBefore(LocalDateTime.now())) {
-            throw new IllegalArgumentException("Verification token expired");
+            throw new IllegalArgumentException("Verification token expired please request a new one");
         }
 
         user.setIsEnabled(true);
@@ -128,6 +131,85 @@ public class AuthenticationService {
         user.setVerificationTokenExpiry(null);
         userRepository.save(user);
 
-        return ResponseEntity.ok("Account verified successfully");
+        return ResponseEntity.ok(
+                AuthenticationResponse.builder()
+                        .accessToken(jwtService.generateToken(user))
+                        .refreshToken(jwtService.generateRefreshToken(user))
+                        .build()
+        );
+
+    }
+
+    public void resendVerificationEmail(String email) {
+        var user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+
+        if (user.getIsEmailVerified()) {
+            throw new IllegalStateException("Email is already verified.");
+        }
+
+        String newToken = UUID.randomUUID().toString();
+        user.setVerificationToken(newToken);
+        user.setVerificationTokenExpiry(LocalDateTime.now().plusMinutes(15));
+        userRepository.save(user);
+
+        emailService.sendVerificationEmail(user.getEmail(), newToken);
+    }
+    public AuthenticationResponse changePassword(ChangePasswordRequest request) {
+        String email = ((UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal()).getUsername();
+        var user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+
+        if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
+            throw new IllegalArgumentException("Old password is incorrect.");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+
+        tokenService.revokeAllUserToken(user);
+        String accessToken = jwtService.generateToken(user);
+        var refreshToken = jwtService.generateRefreshToken(user);
+        tokenService.saveUserToken(user, accessToken);
+
+        return AuthenticationResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .build();
+    }
+    public ResponseEntity<String> resetPassword(ResetPasswordRequest request) {
+        var user = userRepository.findByResetToken(request.getToken())
+                .orElseThrow(() -> new IllegalArgumentException("Invalid reset token"));
+
+        if (user.getResetTokenExpiry().isBefore(LocalDateTime.now())) {
+            throw new IllegalArgumentException("Reset token has expired.");
+        }
+
+        // password strength check (اختياري)
+        Zxcvbn passwordChecker = new Zxcvbn();
+        Strength strength = passwordChecker.measure(request.getNewPassword());
+        if (strength.getScore() < 3) {
+            throw new IllegalArgumentException("Password is too weak.");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setResetToken(null);
+        user.setResetTokenExpiry(null);
+        userRepository.save(user);
+
+        return ResponseEntity.ok("Password has been reset successfully.");
+    }
+
+
+    public ResponseEntity<String> resetPasswordMailSender(String email) {
+        var user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+        String newToken = UUID.randomUUID().toString();
+        user.setResetToken(newToken);
+        user.setResetTokenExpiry(LocalDateTime.now().plusMinutes(15));
+        userRepository.save(user);
+        emailService.sendForgetPasswordEmail(user.getEmail(), newToken);
+        return ResponseEntity.ok("Reset password mail sent.");
+
     }
 }
