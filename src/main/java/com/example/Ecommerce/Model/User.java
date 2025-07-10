@@ -33,6 +33,9 @@ public class User implements UserDetails {
     private String phone;
 
     private String profileImageUrl;
+    @Column(name = "profile_image_id")
+    private String profileImagePublicId;
+
 
     @Column(name = "verification_token")
     private String verificationToken;

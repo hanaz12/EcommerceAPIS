@@ -4,12 +4,15 @@ package com.example.Ecommerce.auth;
 import com.example.Ecommerce.Emails.EmailService;
 import com.example.Ecommerce.auth.DTOs.*;
 import com.example.Ecommerce.token.TokenService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 
@@ -19,15 +22,18 @@ import java.io.IOException;
 public class AuthenticationController {
     private final AuthenticationService authenticationService;
     private final TokenService tokenService;
-    private final EmailService emailService;
+    private final ObjectMapper objectMapper;
 
-    @PostMapping("/register")
+    @PostMapping(value = "/register", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<AuthenticationResponse> register(
-            @Valid @RequestBody RegisterRequest request) {
-        return ResponseEntity.ok(authenticationService.register(request));
+            @RequestPart("user") String userJson,
+            @RequestPart(value = "image", required = false) MultipartFile image
+    ) throws IOException {
+        System.out.println("Receiving multipart request");
 
+        RegisterRequest request = objectMapper.readValue(userJson, RegisterRequest.class);
+        return ResponseEntity.ok(authenticationService.register(request, image));
     }
-
 
     @PostMapping("/login")
     public ResponseEntity<AuthenticationResponse> authenticate(

@@ -4,10 +4,12 @@ import com.example.Ecommerce.Exceptions.UserNotFoundException;
 import com.example.Ecommerce.Enums.Role;
 import com.example.Ecommerce.Model.User;
 import com.example.Ecommerce.Repository.UserRepository;
+import com.example.Ecommerce.ServiceImpl.ImageService;
 import com.example.Ecommerce.auth.DTOs.*;
 import com.example.Ecommerce.config.JwtService;
 import com.example.Ecommerce.token.TokenService;
 import com.example.Ecommerce.Emails.EmailService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nulabinc.zxcvbn.Strength;
 import com.nulabinc.zxcvbn.Zxcvbn;
 import lombok.RequiredArgsConstructor;
@@ -18,8 +20,11 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -32,30 +37,47 @@ public class AuthenticationService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final EmailService emailService;
+ private final ImageService imageService;
 
     // ✅ تسجيل مستخدم عادي
-    public AuthenticationResponse register(RegisterRequest request) {
-        return registerWithRole(request, Role.USER);
+    public AuthenticationResponse register(RegisterRequest request , MultipartFile image) throws IOException {
+        System.out.println("in a register method user");
+        return registerWithRole(request, Role.USER,image);
     }
 
     // ✅ تسجيل أدمن
-    public AuthenticationResponse registerAdmin(RegisterRequest request) {
-        return registerWithRole(request, Role.ADMIN);
+    public AuthenticationResponse registerAdmin(RegisterRequest request ,  MultipartFile image) throws IOException {
+        return registerWithRole(request, Role.ADMIN , image);
     }
 
     // ✅ ميثود موحدة للتسجيل بأي Role
-    private AuthenticationResponse registerWithRole(RegisterRequest request, Role role) {
+    private AuthenticationResponse registerWithRole(RegisterRequest request, Role role, MultipartFile imageFile) throws IOException {
+        System.out.println("in a register method with role");
+        // 1. Check password strength
         Zxcvbn passwordChecker = new Zxcvbn();
         Strength strength = passwordChecker.measure(request.getPassword());
 
         if (strength.getScore() < 3) {
-            throw new IllegalArgumentException("Password is too weak. Try using symbols, uppercase letters, and longer length.");
+            throw new IllegalArgumentException("Password is too weak.");
         }
 
+        // 2. Check if email already exists
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             throw new IllegalArgumentException("Email already exists.");
         }
 
+        // 3. Upload image only if provided
+        String imgUrl=null;
+        String publicId=null;
+        String imageUrl = null;
+        if (imageFile != null && !imageFile.isEmpty()) {
+            Map<String, String> uploadResult = imageService.uploadImage(imageFile);
+           imgUrl = uploadResult.get("url");
+             publicId = uploadResult.get("publicId");
+
+        }
+
+        // 4. Generate verification token
         String verificationToken = UUID.randomUUID().toString();
         LocalDateTime expiry = LocalDateTime.now().plusHours(24);
 
@@ -64,9 +86,10 @@ public class AuthenticationService {
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .phone(request.getPhone())
-                .profileImageUrl(request.getProfileImageUrl())
+                .profileImageUrl(imageUrl)
+                .profileImagePublicId(publicId)
                 .role(role)
-                .isEnabled(false) // الحساب لسه مش مفعل
+                .isEnabled(false)
                 .isEmailVerified(false)
                 .verificationToken(verificationToken)
                 .verificationTokenExpiry(expiry)
@@ -77,7 +100,6 @@ public class AuthenticationService {
 
         return AuthenticationResponse.builder()
                 .accessToken("Account created. Please verify your email.")
-                .refreshToken(null)
                 .build();
     }
 
