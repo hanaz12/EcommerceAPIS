@@ -28,5 +28,13 @@ public class ImageService {
 
         return result;
     }
+    public boolean deleteImage(String profileImagePublicId) throws IOException {
+        try{
+            Map result=cloudinary.uploader().destroy(profileImagePublicId, ObjectUtils.emptyMap());
+            return "ok".equals(result.get("status"));
+        } catch (Exception e) {
+            throw new IOException(e.getMessage());
+        }
+    }
 
 }

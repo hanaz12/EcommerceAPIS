@@ -29,5 +29,5 @@ public class RegisterRequest {
     @Pattern(regexp = "01[0125][0-9]{8}", message = "Phone number must be a valid Egyptian number")
     private String phone;
 
-    private String profileImageUrl;
+
 }

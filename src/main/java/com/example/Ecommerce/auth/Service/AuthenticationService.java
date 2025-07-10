@@ -1,4 +1,4 @@
-package com.example.Ecommerce.auth;
+package com.example.Ecommerce.auth.Service;
 
 import com.example.Ecommerce.Exceptions.UserNotFoundException;
 import com.example.Ecommerce.Enums.Role;
@@ -9,7 +9,6 @@ import com.example.Ecommerce.auth.DTOs.*;
 import com.example.Ecommerce.config.JwtService;
 import com.example.Ecommerce.token.TokenService;
 import com.example.Ecommerce.Emails.EmailService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nulabinc.zxcvbn.Strength;
 import com.nulabinc.zxcvbn.Zxcvbn;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +37,29 @@ public class AuthenticationService {
     private final AuthenticationManager authenticationManager;
     private final EmailService emailService;
  private final ImageService imageService;
+ private final PasswordValidatorService passwordValidatorService;
+
+ private Map<String , String> uploadImageIfPresent(MultipartFile file) throws IOException {
+     if(file!=null && !file.isEmpty()){
+         return imageService.uploadImage(file);
+     }
+     return Map.of("url" , null , "publicId" , null);
+ }
+ private User buildUser(RegisterRequest registerRequest, Role role , String imgUrl , String publicId,String token , LocalDateTime expiry ) {
+     return User.builder()
+             .fullName(registerRequest.getFullName())
+             .email(registerRequest.getEmail())
+             .password(passwordEncoder.encode(registerRequest.getPassword()))
+             .phone(registerRequest.getPhone())
+             .profileImageUrl(imgUrl)
+             .profileImagePublicId(publicId)
+             .isEnabled(false)
+             .isEmailVerified(false)
+             .verificationToken(token)
+             .verificationTokenExpiry(expiry)
+             .role(role)
+             .build();
+ }
 
     // ✅ تسجيل مستخدم عادي
     public AuthenticationResponse register(RegisterRequest request , MultipartFile image) throws IOException {
@@ -52,49 +74,22 @@ public class AuthenticationService {
 
     // ✅ ميثود موحدة للتسجيل بأي Role
     private AuthenticationResponse registerWithRole(RegisterRequest request, Role role, MultipartFile imageFile) throws IOException {
-        System.out.println("in a register method with role");
-        // 1. Check password strength
-        Zxcvbn passwordChecker = new Zxcvbn();
-        Strength strength = passwordChecker.measure(request.getPassword());
 
-        if (strength.getScore() < 3) {
-            throw new IllegalArgumentException("Password is too weak.");
-        }
-
+        passwordValidatorService.validate(request.getPassword());
         // 2. Check if email already exists
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             throw new IllegalArgumentException("Email already exists.");
         }
 
-        // 3. Upload image only if provided
-        String imgUrl=null;
-        String publicId=null;
-        String imageUrl = null;
-        if (imageFile != null && !imageFile.isEmpty()) {
-            Map<String, String> uploadResult = imageService.uploadImage(imageFile);
-           imgUrl = uploadResult.get("url");
-             publicId = uploadResult.get("publicId");
-
-        }
+       Map<String,String> uploadImageResult = uploadImageIfPresent(imageFile);
+        String imgUrl= uploadImageResult.get("url");
+        String publicId = uploadImageResult.get("publicId");
 
         // 4. Generate verification token
         String verificationToken = UUID.randomUUID().toString();
         LocalDateTime expiry = LocalDateTime.now().plusHours(24);
 
-        var user = User.builder()
-                .fullName(request.getFullName())
-                .email(request.getEmail())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .phone(request.getPhone())
-                .profileImageUrl(imageUrl)
-                .profileImagePublicId(publicId)
-                .role(role)
-                .isEnabled(false)
-                .isEmailVerified(false)
-                .verificationToken(verificationToken)
-                .verificationTokenExpiry(expiry)
-                .build();
-
+        User user=buildUser(request,role,imgUrl,publicId,verificationToken,expiry);
         var savedUser = userRepository.save(user);
         emailService.sendVerificationEmail(user.getEmail(), verificationToken);
 
@@ -185,6 +180,7 @@ public class AuthenticationService {
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
             throw new IllegalArgumentException("Old password is incorrect.");
         }
+        passwordValidatorService.validate(request.getNewPassword());
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
@@ -207,12 +203,7 @@ public class AuthenticationService {
             throw new IllegalArgumentException("Reset token has expired.");
         }
 
-        // password strength check (اختياري)
-        Zxcvbn passwordChecker = new Zxcvbn();
-        Strength strength = passwordChecker.measure(request.getNewPassword());
-        if (strength.getScore() < 3) {
-            throw new IllegalArgumentException("Password is too weak.");
-        }
+        passwordValidatorService.validate(request.getNewPassword());
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setResetToken(null);
